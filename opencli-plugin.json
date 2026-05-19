@@ -1,0 +1,6 @@
+{
+  "name": "opencli-plugin-devcloud",
+  "version": "1.0.0",
+  "description": "Huawei DevCloud adapter for OpenCLI — export sprint tasks to Excel",
+  "opencli": ">=1.7.22"
+}

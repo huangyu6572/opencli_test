@@ -1,0 +1,9 @@
+{
+  "name": "opencli-plugin-opencli-plugin-devcloud",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Huawei DevCloud sprint adapter",
+  "peerDependencies": {
+    "@jackwener/opencli": ">=1.7.22"
+  }
+}
