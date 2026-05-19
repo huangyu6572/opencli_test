@@ -34,7 +34,7 @@ SESSION = "devcloud-tasks"
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 DEMO_PATH = os.path.join(SCRIPT_DIR, "excel", "demo.xlsx")
 
-SHEET_FEATURE = "\u65b0\u589e\u529f\u80fd"   # xin zeng gong neng
+SHEET_FEATURE = "\u65b0\u589e\u529f\u80fd "  # xin zeng gong neng (trailing space in xlsx)
 SHEET_BUG     = "\u4fee\u590d\u7f3a\u9677"   # xiu fu que xian
 
 # JavaScript: synchronous XHR to the same-origin getShow API.
@@ -132,7 +132,7 @@ def fetch_task(url):
         "subject":    data.get("subject", ""),
         "status":     data.get("status", ""),
         "assignee":   data.get("assignee", ""),
-        "priority":   data.get("priority", ""),
+        "priority":   data.get("priority", "").strip(),
         "type":       data.get("type", ""),
         "due_date":   _parse_date(data.get("due_date", "")),
         "start_date": _parse_date(data.get("start_date", "")),
