@@ -6,8 +6,8 @@ Routing:
   tracker == "Bug"   -> sheet (xiu fu que xian)
   anything else      -> sheet (xin zeng gong neng)
 
-New-feature columns (A-I):
-  ID | Title | EndDate | Status | Assignee | EstStart | EstEnd | Priority | Created
+New-feature columns (A-H, F/G/I left blank):
+  ID | Title | EndDate | Status | Assignee | - | - | Priority | -
 
 Bug columns (A-E):
   ID | Title | Status | Assignee | Priority
@@ -60,9 +60,7 @@ EXTRACT_JS = (
     "assignee:iss.assigned_to&&iss.assigned_to.firstName||'',"
     "priority:iss.priority&&iss.priority.name||'',"
     "type:iss.tracker&&iss.tracker.name||'',"
-    "due_date:iss.due_date||'',"
-    "start_date:iss.start_date||'',"
-    "created_on:iss.created_on||''"
+    "due_date:iss.due_date||''"
     "});"
     "})()"
 )
@@ -135,8 +133,6 @@ def fetch_task(url):
         "priority":   data.get("priority", "").strip(),
         "type":       data.get("type", ""),
         "due_date":   _parse_date(data.get("due_date", "")),
-        "start_date": _parse_date(data.get("start_date", "")),
-        "created_on": _parse_date(data.get("created_on", "")),
     }
     print(f"  [{r['type']}] {r['subject'][:50]!r}  status={r['status']!r}  priority={r['priority']!r}", flush=True)
     return r
@@ -186,16 +182,13 @@ def update_excel(rows):
             ws.cell(row_i, 5).value = r["priority"]
             added_bug += 1
         else:
-            # A: ID  B: Title  C: EndDate  D: Status  E: Assignee  F: EstStart  G: EstEnd  H: Priority  I: Created
+            # A: ID  B: Title  C: EndDate  D: Status  E: Assignee  H: Priority
             ws.cell(row_i, 1).value = r["id"]
             ws.cell(row_i, 2).value = r["subject"]
             ws.cell(row_i, 3).value = r["due_date"]
             ws.cell(row_i, 4).value = r["status"]
             ws.cell(row_i, 5).value = r["assignee"]
-            ws.cell(row_i, 6).value = r["start_date"]
-            ws.cell(row_i, 7).value = r["due_date"]
             ws.cell(row_i, 8).value = r["priority"]
-            ws.cell(row_i, 9).value = r["created_on"]
             added_feat += 1
 
         print(f"  written #{r['id']} -> '{ws.title}' row {row_i}", flush=True)
