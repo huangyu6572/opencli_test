@@ -9,8 +9,8 @@ Routing:
 New-feature columns (A-I):
   ID | Title | EndDate | Status | Assignee | EstStart | EstEnd | Priority | Created
 
-Bug columns (A-H):
-  ID | Title | Status | Assignee | Priority | Done% | Type | EndDate
+Bug columns (A-E):
+  ID | Title | Status | Assignee | Priority
 
 Usage:
     python update_demo.py <url1> [url2 ...]
@@ -62,8 +62,7 @@ EXTRACT_JS = (
     "type:iss.tracker&&iss.tracker.name||'',"
     "due_date:iss.due_date||'',"
     "start_date:iss.start_date||'',"
-    "created_on:iss.created_on||'',"
-    "done_ratio:iss.done_ratio"
+    "created_on:iss.created_on||''"
     "});"
     "})()"
 )
@@ -95,8 +94,8 @@ def _parse_date(val):
 
 
 def extract_task_number(url):
-    m = re.search(r"/detail/(\d+)", url)
-    return m.group(1) if m else re.search(r"/(\d{7,})(?:/|$)", url) and re.search(r"/(\d{7,})(?:/|$)", url).group(1) or ""
+    m = re.search(r"/detail/(\d+)", url) or re.search(r"/(\d{7,})(?:/|$)", url)
+    return m.group(1) if m else ""
 
 
 def fetch_task(url):
@@ -138,7 +137,6 @@ def fetch_task(url):
         "due_date":   _parse_date(data.get("due_date", "")),
         "start_date": _parse_date(data.get("start_date", "")),
         "created_on": _parse_date(data.get("created_on", "")),
-        "done_ratio": data.get("done_ratio", ""),
     }
     print(f"  [{r['type']}] {r['subject'][:50]!r}  status={r['status']!r}  priority={r['priority']!r}", flush=True)
     return r
@@ -180,15 +178,12 @@ def update_excel(rows):
         row_i = _next_empty_row(ws)
 
         if is_bug:
-            # A: ID  B: Title  C: Status  D: Assignee  E: Priority  F: Done%  G: Type  H: EndDate
+            # A: ID  B: Title  C: Status  D: Assignee  E: Priority
             ws.cell(row_i, 1).value = r["id"]
             ws.cell(row_i, 2).value = r["subject"]
             ws.cell(row_i, 3).value = r["status"]
             ws.cell(row_i, 4).value = r["assignee"]
             ws.cell(row_i, 5).value = r["priority"]
-            ws.cell(row_i, 6).value = r["done_ratio"]
-            ws.cell(row_i, 7).value = r["type"]
-            ws.cell(row_i, 8).value = r["due_date"]
             added_bug += 1
         else:
             # A: ID  B: Title  C: EndDate  D: Status  E: Assignee  F: EstStart  G: EstEnd  H: Priority  I: Created
