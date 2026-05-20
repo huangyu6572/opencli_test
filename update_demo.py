@@ -23,6 +23,7 @@ import json
 import re
 import sys
 import os
+import html as _html_lib
 from datetime import datetime, timezone
 
 try:
@@ -84,10 +85,19 @@ EXTRACT_JS = (
     "type:iss.tracker&&iss.tracker.name||'',"
     "due_date:iss.due_date||'',"
     "start_date:iss.start_date||'',"
-    "created_on:iss.created_on||''"
+    "created_on:iss.created_on||'',"
+    "description:iss.description||''"
     "});"
     "})()"
 )
+
+
+def _strip_html(raw, maxlen=50):
+    """Strip HTML tags, decode entities, collapse whitespace, truncate."""
+    text = re.sub(r'<[^>]+>', ' ', str(raw))
+    text = _html_lib.unescape(text)
+    text = re.sub(r'\s+', ' ', text).strip()
+    return text[:maxlen]
 
 
 def run_opencli(*args):
@@ -150,16 +160,17 @@ def fetch_task(url):
         return None
 
     r = {
-        "id":         str(data.get("id", task_num)),
-        "url":        url,
-        "subject":    data.get("subject", ""),
-        "status":     data.get("status", ""),
-        "assignee":   data.get("assignee", ""),
-        "priority":   data.get("priority", "").strip(),
-        "type":       data.get("type", ""),
-        "due_date":   _parse_date(data.get("due_date", "")),
-        "start_date": _parse_date(data.get("start_date", "")),
-        "created_on": _parse_date(data.get("created_on", "")),
+        "id":          str(data.get("id", task_num)),
+        "url":         url,
+        "subject":     data.get("subject", ""),
+        "status":      data.get("status", ""),
+        "assignee":    data.get("assignee", ""),
+        "priority":    data.get("priority", "").strip(),
+        "type":        data.get("type", ""),
+        "due_date":    _parse_date(data.get("due_date", "")),
+        "start_date":  _parse_date(data.get("start_date", "")),
+        "created_on":  _parse_date(data.get("created_on", "")),
+        "description": _strip_html(data.get("description", "")),
     }
     print(f"  [{r['type']}] {r['subject'][:50]!r}  status={r['status']!r}  priority={r['priority']!r}", flush=True)
     return r
@@ -217,6 +228,7 @@ def update_excel(rows, demo_path):
 
     wb = openpyxl.load_workbook(demo_path)
     added_feat = added_bug = added_legacy = skipped = 0
+    descriptions = {}  # {task_id: description} sidecar
 
     for r in rows:
         if r is None:
@@ -267,6 +279,8 @@ def update_excel(rows, demo_path):
                 added_feat += 1
 
         print(f"  written #{r['id']} -> '{ws.title}' row {row_i}", flush=True)
+        if r.get("description"):
+            descriptions[r["id"]] = r["description"]
 
     # Update 版本信息: read build URL from B3, fetch latest commit, write date+commit
     try:
@@ -285,12 +299,25 @@ def update_excel(rows, demo_path):
     wb.save(demo_path)
     print(f"\nSaved: {demo_path}", flush=True)
 
+    # Merge descriptions sidecar (task_descriptions.json)
+    sidecar = os.path.join(EXCEL_DIR, "task_descriptions.json")
+    if os.path.exists(sidecar):
+        import json as _json
+        with open(sidecar, encoding="utf-8") as f:
+            existing = _json.load(f)
+        existing.update(descriptions)
+        descriptions = existing
+    if descriptions:
+        import json as _json
+        with open(sidecar, "w", encoding="utf-8") as f:
+            _json.dump(descriptions, f, ensure_ascii=False, indent=2)
+
     # Sync to Word release-notes document if update_word.py is present
     try:
         sys.path.insert(0, SCRIPT_DIR)
         from update_word import update_word as _uw
-        # Pass explicit excel path so we don't re-resolve
-        _uw(excel_path=demo_path)
+        # Pass explicit excel path and descriptions so we don't re-resolve
+        _uw(excel_path=demo_path, descriptions=descriptions)
     except ImportError:
         pass  # update_word.py optional
     except Exception as e:

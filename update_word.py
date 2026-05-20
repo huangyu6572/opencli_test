@@ -135,7 +135,7 @@ def _write_cell(cell, text):
 
 def _fill_table(table, data_rows, col_title=1):
     """
-    Clear data rows and repopulate: col0=seq, col{col_title}=标题.
+    Clear data rows and repopulate: col0=seq, col{col_title}=标题, col2=描述.
     Preserves header; clears all data rows then rebuilds.
     """
     _clear_data_rows(table)
@@ -146,6 +146,8 @@ def _fill_table(table, data_rows, col_title=1):
         _write_cell(r.cells[0], seq)
         if col_title < len(r.cells):
             _write_cell(r.cells[col_title], row_dict.get("\u6807\u9898", ""))
+        if 2 < len(r.cells) and col_title != 2:
+            _write_cell(r.cells[2], row_dict.get("\u63cf\u8ff0", ""))
     print(f"  [word] table: {len(data_rows)} rows filled", flush=True)
 
 
@@ -190,7 +192,7 @@ def _update_upgrade_para(doc, section_heading, feat_rows, bug_rows, legacy_rows,
                         target.add_run(summary)
                     print(f"  [word] \u5347\u7ea7\u8bf4\u660e: updated", flush=True)
                     return
-    print("  [word] WARNING: \u5347\u7ea7\u8bf4\u660e in [{section_heading}] not found",
+    print(f"  [word] WARNING: \u5347\u7ea7\u8bf4\u660e in [{section_heading}] not found",
           flush=True)
 
 
@@ -214,14 +216,22 @@ def inspect_doc(word_path):
 
 # ── main update ───────────────────────────────────────────────────────────────
 
-def update_word(excel_path=None, word_path=None):
+def update_word(excel_path=None, word_path=None, descriptions=None):
     _require("openpyxl", "openpyxl")
     _require("docx", "python-docx")
     import openpyxl
     from docx import Document
 
     excel_path = _resolve(EXCEL_DIR, ".xlsx", excel_path)
-    word_path  = _resolve(WORD_DIR,  ".docx", word_path, keyword="\u7ba1\u7ef4")
+    word_path  = _resolve(WORD_DIR,  ".docx", word_path, keyword="管维")
+
+    # Load descriptions sidecar if not passed in
+    if descriptions is None:
+        sidecar = os.path.join(EXCEL_DIR, "task_descriptions.json")
+        if os.path.exists(sidecar):
+            import json
+            with open(sidecar, encoding="utf-8") as f:
+                descriptions = json.load(f)
 
     wb = openpyxl.load_workbook(excel_path)
 
@@ -238,6 +248,14 @@ def update_word(excel_path=None, word_path=None):
     feat_rows   = _read_sheet_rows(wb, SHEET_FEATURE)
     bug_rows    = _read_sheet_rows(wb, SHEET_BUG)
     legacy_rows = _read_sheet_rows(wb, SHEET_LEGACY)
+
+    # Inject descriptions into row dicts
+    if descriptions:
+        for row_list in (feat_rows, bug_rows, legacy_rows):
+            for rd in row_list:
+                tid = str(rd.get("编号", "") or "")
+                if tid in descriptions:
+                    rd["描述"] = descriptions[tid]
 
     doc = Document(word_path)
     SECTION = "\u7ba1\u7ef4\u5e73\u53f0\u7248\u672c\u66f4\u65b0\u8bf4\u660e"  # 管维平台版本更新说明
