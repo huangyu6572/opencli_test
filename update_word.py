@@ -121,6 +121,15 @@ def _clear_data_rows(table):
         tr.getparent().remove(tr)
 
 
+def _ensure_one_blank_row(table):
+    """Ensure table has exactly 1 empty data row (header + 1 blank)."""
+    # Remove all data rows
+    _clear_data_rows(table)
+    # Add one blank row if not already present
+    if len(table.rows) == 1:
+        table.add_row()
+
+
 def _write_cell(cell, text):
     """Write text into a cell, reusing first run for formatting."""
     para = cell.paragraphs[0]
@@ -300,13 +309,14 @@ def update_word(excel_path=None, word_path=None, descriptions=None, clear=False)
         t = _table_after_section(doc, SECTION, sub_heading)
         if t:
             if clear:
-                # --clear mode: always wipe table data, then fill if there are rows
-                _clear_data_rows(t)
+                # --clear mode: wipe table data, then fill or leave 1 blank row
                 if rows:
+                    _clear_data_rows(t)
                     _fill_table(t, rows)
                     print(f"  [word] {label}: {len(rows)} rows (cleared)", flush=True)
                 else:
-                    print(f"  [word] {label}: cleared (0 rows)", flush=True)
+                    _ensure_one_blank_row(t)
+                    print(f"  [word] {label}: cleared (1 blank)", flush=True)
             else:
                 _fill_table(t, rows)
                 print(f"  [word] {label}: {len(rows)} rows", flush=True)
