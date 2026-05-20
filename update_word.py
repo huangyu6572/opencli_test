@@ -121,12 +121,10 @@ def _clear_data_rows(table):
         tr.getparent().remove(tr)
 
 
-def _ensure_one_blank_row(table):
-    """Ensure table has exactly 1 empty data row (header + 1 blank)."""
-    # Remove all data rows
+def _ensure_one_blank_row(table, count=10):
+    """Ensure table has exactly `count` empty data rows (header + count blank)."""
     _clear_data_rows(table)
-    # Add one blank row if not already present
-    if len(table.rows) == 1:
+    while len(table.rows) - 1 < count:
         table.add_row()
 
 
@@ -316,7 +314,7 @@ def update_word(excel_path=None, word_path=None, descriptions=None, clear=False)
                     print(f"  [word] {label}: {len(rows)} rows (cleared)", flush=True)
                 else:
                     _ensure_one_blank_row(t)
-                    print(f"  [word] {label}: cleared (1 blank)", flush=True)
+                    print(f"  [word] {label}: cleared (10 blank)", flush=True)
             else:
                 _fill_table(t, rows)
                 print(f"  [word] {label}: {len(rows)} rows", flush=True)

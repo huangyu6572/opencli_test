@@ -276,21 +276,27 @@ def _next_empty_row(ws):
 
 
 def _clear_sheet_data(wb, sheet_name):
-    """Delete data rows (row 3+) and leave row 2 as a yellow-highlighted blank row."""
+    """Delete rows 12+, keep rows 2-11 as yellow blank rows with borders on top."""
     if sheet_name not in wb.sheetnames:
         return
     ws = wb[sheet_name]
-    max_r = ws.max_row
-    # Delete rows 3+
-    if max_r >= 3:
-        ws.delete_rows(3, max_r - 2)
-    # Row 2: clear content, set yellow background
-    from openpyxl.styles import PatternFill
+    from openpyxl.styles import PatternFill, Border, Side
     yellow_fill = PatternFill(start_color="FFFF00", end_color="FFFF00", fill_type="solid")
-    for c in range(1, ws.max_column + 1):
-        cell = ws.cell(row=2, column=c)
-        cell.value = None
-        cell.fill = yellow_fill
+    thin_border = Border(
+        left=Side(style="thin"), right=Side(style="thin"),
+        top=Side(style="thin"), bottom=Side(style="thin"),
+    )
+    max_r = ws.max_row
+    # Delete rows 12+
+    if max_r >= 12:
+        ws.delete_rows(12, max_r - 11)
+    # Rows 2-11: clear, set yellow fill, apply borders (fill behind border)
+    for r in range(2, 12):
+        for c in range(1, ws.max_column + 1):
+            cell = ws.cell(row=r, column=c)
+            cell.value = None
+            cell.fill = yellow_fill
+            cell.border = thin_border
 
 
 def update_excel(rows, demo_path, clear=False):
