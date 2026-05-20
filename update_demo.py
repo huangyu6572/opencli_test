@@ -134,6 +134,7 @@ def fetch_task(url):
 
     r = {
         "id":         str(data.get("id", task_num)),
+        "url":        url,
         "subject":    data.get("subject", ""),
         "status":     data.get("status", ""),
         "assignee":   data.get("assignee", ""),
@@ -191,7 +192,7 @@ def update_excel(rows):
 
         if is_bug and not is_legacy:
             # 修复缺陷: A编号 B标题 C状态 D处理人 E优先级 (F完成度 G类型 skip) H结束时间 I预计开始 J预计结束 K创建时间
-            ws.cell(row_i, 1).value  = r["id"]
+            c = ws.cell(row_i, 1); c.value = r["id"]; c.hyperlink = r["url"]
             ws.cell(row_i, 2).value  = r["subject"]
             ws.cell(row_i, 3).value  = r["status"]
             ws.cell(row_i, 4).value  = r["assignee"]
@@ -203,7 +204,7 @@ def update_excel(rows):
             added_bug += 1
         else:
             # 新增功能 / 遗留问题: A编号 B标题 C结束时间 D状态 E处理人 F预计开始 G预计结束 H优先级 I创建时间
-            ws.cell(row_i, 1).value = r["id"]
+            c = ws.cell(row_i, 1); c.value = r["id"]; c.hyperlink = r["url"]
             ws.cell(row_i, 2).value = r["subject"]
             ws.cell(row_i, 3).value = r["due_date"]
             ws.cell(row_i, 4).value = r["status"]
