@@ -100,46 +100,45 @@ def _clean_html(raw):
     return text
 
 
-def _summarize(text, maxlen=50):
-    """Produce a concise Chinese summary (≤maxlen chars) from raw description text.
-    Uses heuristic: strip boilerplate patterns, extract first meaningful sentence."""
+def _summarize(text):
+    """Extract the core problem/solution from a DevCloud description.
+    Strips boilerplate, keeps substantive action descriptions.
+    No length limit. Captures what this task actually does/fixes."""
     if not text or not text.strip():
         return ""
     t = text.strip()
-    # Remove DevCloud boilerplate blocks (order matters)
-    boilerplate_keys = [
-        r'前提条件[：:]\s*',
-        r'测试环境[：:][^。；\n/]*?[。；\n/]\s*',
-        r'测试步骤[：:]\s*',
-        r'前置条件[：:]\s*',
-        r'环境信息[：:]\s*',
-        r'用例描述[：:]\s*',
-        r'测试用例[：:]\s*',
-        r'期望结果[：:]\s*',
-    ]
-    for pat in boilerplate_keys:
-        t = re.sub(pat, '', t, count=1)
-    t = t.strip()
-    # Remove leading // and numbering
-    t = re.sub(r'^[\s//]+', '', t)
-    t = re.sub(r'^\d+[\.\、\)]\s*', '', t)
-    t = t.strip()
-    # Take first meaningful segment up to first Chinese period
-    m = re.match(r'^(.+?[。！？])', t)
-    if m:
-        t = m.group(1)
+
+    # Extract the test-steps section (核心功能描述) — this is the most useful part
+    # Structure: 测试步骤：<content> [期望结果：...]
+    step_match = re.search(r'测试步骤[：:]\s*(.+?)(?=期望结果[：:]|$)', t, re.DOTALL)
+    if step_match:
+        content = step_match.group(1).strip()
     else:
-        m2 = re.match(r'^(.+?[；;])', t)
-        if m2:
-            t = m2.group(1)
-        else:
-            # No sentence boundary — truncate at first Chinese comma
-            m3 = re.match(r'^(.+?[，,])', t)
-            if m3:
-                t = m3.group(1)
-    # Collapse whitespace
-    t = re.sub(r'\s+', ' ', t).strip()
-    return t[:maxlen]
+        # Fallback: use everything but strip boilerplate headers
+        content = t
+
+    # Clean up the content
+    # Remove // comments (until next numbered step or Chinese text, not greedy)
+    content = re.sub(r'\s*//[^/\d]*(?=\d)', '', content)
+    content = re.sub(r'\s*//\s*$', '', content)       # trailing //
+    # Remove parenthetical notes with no-changes markers
+    content = re.sub(r'[（(]\s*(?:暂不支持|暂未|TODO|待定|license相关)[^)）]*[)）]', '', content)
+    # Remove (rtos接口相关，暂不支持) type patterns
+    content = re.sub(r'[（(][^)）]{0,30}[)）]', '', content)
+    # Numbered steps: "1. xxx 2. xxx" → "xxx；xxx"
+    content = re.sub(r'\s*\d+[\.\、\)]\s*', '；', content)
+    # Clean up
+    content = re.sub(r'[；;]{2,}', '；', content)
+    content = re.sub(r'[，,]{2,}', '，', content)
+    content = re.sub(r'^[；;，,.\s]+', '', content)
+    content = re.sub(r'[；;，,.\s]+$', '', content)
+    content = re.sub(r'\s+', ' ', content).strip()
+
+    # If nothing left after cleaning, return the original stripped
+    if not content:
+        return t[:200]
+
+    return content
 
 
 def run_opencli(*args):

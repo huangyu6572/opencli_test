@@ -149,7 +149,7 @@ def _fill_table(table, data_rows, col_title=1):
         _write_cell(r.cells[0], seq)
         if col_title < len(r.cells):
             _write_cell(r.cells[col_title], row_dict.get("\u6807\u9898", ""))
-        if 2 < len(r.cells) and col_title != 2:
+        if 2 < len(r.cells):
             _write_cell(r.cells[2], row_dict.get("\u63cf\u8ff0", ""))
     print(f"  [word] table: {len(data_rows)} rows filled", flush=True)
 
