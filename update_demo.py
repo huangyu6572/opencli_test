@@ -33,11 +33,28 @@ except ImportError:
 
 SESSION = "devcloud-tasks"
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-DEMO_PATH = os.path.join(SCRIPT_DIR, "excel", "demo.xlsx")
+EXCEL_DIR  = os.path.join(SCRIPT_DIR, "excel")
+
+
+def _resolve_xlsx(explicit=None):
+    """Return path to the target xlsx. Auto-discover if not specified."""
+    if explicit:
+        return explicit
+    found = [f for f in os.listdir(EXCEL_DIR) if f.lower().endswith(".xlsx")]
+    if len(found) == 1:
+        return os.path.join(EXCEL_DIR, found[0])
+    if len(found) == 0:
+        print(f"ERROR: no .xlsx files found in {EXCEL_DIR}", file=sys.stderr)
+        sys.exit(1)
+    print(f"Multiple xlsx files found — use --excel to specify one:", file=sys.stderr)
+    for f in found:
+        print(f"  {f}", file=sys.stderr)
+    sys.exit(1)
 
 SHEET_FEATURE = "\u65b0\u589e\u529f\u80fd "  # 新增功能 (trailing space in xlsx)
 SHEET_BUG     = "\u4fee\u590d\u7f3a\u9677"   # 修复缺陷
 SHEET_LEGACY  = "\u9057\u7559\u95ee\u9898"   # 遗留问题
+SHEET_VERSION = "\u7248\u672c\u4fe1\u606f"   # 版本信息
 
 # Statuses that route to the legacy (遗留问题) sheet regardless of type
 LEGACY_STATUSES = {"\u65b0\u5efa", "\u8fdb\u884c\u4e2d"}  # 新建, 进行中
@@ -148,6 +165,37 @@ def fetch_task(url):
     return r
 
 
+# JS: try multiple GitLab selectors to find a 7-40 char hex commit hash.
+_COMMIT_JS = (
+    "(function(){"
+    "var sels=['.commit-sha','[data-testid=\"commit-sha-group\"] a','.label-monospace','a[href*=\"/commit/\"]'];"
+    "for(var i=0;i<sels.length;i++){"
+    "var el=document.querySelector(sels[i]);"
+    "if(el){var t=el.textContent.trim();if(/^[0-9a-f]{7,40}$/.test(t))return t;}"
+    "}"
+    "var btns=document.querySelectorAll('[data-clipboard-text]');"
+    "for(var j=0;j<btns.length;j++){"
+    "var v=btns[j].getAttribute('data-clipboard-text');"
+    "if(v&&/^[0-9a-f]{7,40}$/.test(v.trim()))return v.trim();"
+    "}"
+    "return '';"
+    "})()"
+)
+
+
+def fetch_commit(build_url):
+    """Navigate to the GitLab tree page and return the latest commit hash."""
+    print(f"\n[version] fetching commit from {build_url} ...", flush=True)
+    run_opencli("open", build_url)
+    run_opencli("wait", "selector", ".commit-sha,.label-monospace,[data-clipboard-text]", "--timeout", "10000")
+    run_opencli("wait", "time", "1")
+    out, _, code = run_opencli("eval", _COMMIT_JS)
+    if code == 0 and out and re.fullmatch(r"[0-9a-f]{7,40}", out.strip()):
+        return out.strip()
+    print(f"  [version] could not extract commit (got: {out!r})", flush=True)
+    return None
+
+
 def _id_in_sheet(ws, task_id, id_col=1):
     for row in ws.iter_rows(min_row=2, max_col=id_col, values_only=True):
         if str(row[0]) == str(task_id):
@@ -162,12 +210,12 @@ def _next_empty_row(ws):
     return ws.max_row + 1
 
 
-def update_excel(rows):
-    if not os.path.exists(DEMO_PATH):
-        print(f"ERROR: {DEMO_PATH} not found.", file=sys.stderr)
+def update_excel(rows, demo_path):
+    if not os.path.exists(demo_path):
+        print(f"ERROR: {demo_path} not found.", file=sys.stderr)
         sys.exit(1)
 
-    wb = openpyxl.load_workbook(DEMO_PATH)
+    wb = openpyxl.load_workbook(demo_path)
     added_feat = added_bug = added_legacy = skipped = 0
 
     for r in rows:
@@ -220,14 +268,39 @@ def update_excel(rows):
 
         print(f"  written #{r['id']} -> '{ws.title}' row {row_i}", flush=True)
 
-    wb.save(DEMO_PATH)
-    print(f"\nSaved: {DEMO_PATH}", flush=True)
+    # Update 版本信息: read build URL from B3, fetch latest commit, write date+commit
+    try:
+        vs = wb[SHEET_VERSION]
+        build_url = vs.cell(3, 2).value
+        if build_url:
+            commit = fetch_commit(str(build_url).strip())
+            today = datetime.now().strftime("%Y%m%d")
+            vs.cell(2, 2).value = today
+            if commit:
+                vs.cell(4, 2).value = commit
+            print(f"  [version] 构建日期={today}  commit={commit or '(unchanged)'}", flush=True)
+    except KeyError:
+        print(f"  [version] sheet '{SHEET_VERSION}' not found, skipping", flush=True)
+
+    wb.save(demo_path)
+    print(f"\nSaved: {demo_path}", flush=True)
     print(f"  {SHEET_FEATURE}: +{added_feat}  {SHEET_BUG}: +{added_bug}  {SHEET_LEGACY}: +{added_legacy}  skipped: {skipped}", flush=True)
 
 
 def main():
     args = sys.argv[1:]
     urls = []
+
+    # --excel <path>: explicit xlsx target
+    demo_path = None
+    if "--excel" in args:
+        idx = args.index("--excel")
+        if idx + 1 >= len(args):
+            print("Error: --excel requires a path argument", file=sys.stderr)
+            sys.exit(1)
+        demo_path = args[idx + 1]
+        args = args[:idx] + args[idx + 2:]
+    demo_path = _resolve_xlsx(demo_path)
 
     if "--file" in args:
         idx = args.index("--file")
@@ -245,7 +318,7 @@ def main():
 
     print(f"Fetching {len(urls)} task(s)...", flush=True)
     rows = [fetch_task(u) for u in urls]
-    update_excel([r for r in rows if r is not None])
+    update_excel([r for r in rows if r is not None], demo_path)
 
 
 if __name__ == "__main__":

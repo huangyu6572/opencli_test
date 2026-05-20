@@ -2,47 +2,55 @@
 name: devcloud-update-demo
 description: >
   Extract DevCloud task details from one or more task detail URLs and write them into
-  excel/demo.xlsx.  Bug-type tasks go to the sheet named "修复缺陷"; everything else
-  goes to "新增功能".  Duplicate detection is performed by task ID (column A).
-  Trigger phrases: "更新 demo", "写入 demo", "同步到 excel", "update demo", "write to excel".
+  an Excel file (auto-discovered in excel/ or specified with --excel).
+  Routing: 新建/进行中 → 遗留问题; Bug → 修复缺陷; other → 新增功能.
+  Duplicate detection by task ID. Version sheet (版本信息) auto-updated with today's
+  date and latest commit from the build URL in B3.
+  Trigger phrases: "更新 demo", "写入 demo", "更新 excel", "同步到 excel",
+  "update demo", "write to excel", "更新表格", paste DevCloud detail URLs + update intent.
 allowed-tools:
   - run_in_terminal
 ---
 
 ## When to use this skill
 
-Use this skill when the user pastes one or more DevCloud task/bug URLs and asks to update
-`demo.xlsx`, write to Excel, or sync work items.
+User pastes one or more DevCloud task/bug detail URLs and asks to update an Excel file.
 
-## How to run
-
-1. Collect all DevCloud task detail URLs from the user's message.
-   They match the pattern: `https://hn.devcloud.huaweicloud.com/.*/detail/\d+`
-
-2. Run the Python script, passing each URL as a separate argument:
+## Invocation
 
 ```
 python D:\code\opencli_test\update_demo.py <url1> [url2 ...]
 ```
 
-Or, if the user supplies a file of URLs (one per line):
+Auto-discovers the single `.xlsx` in `excel/`. If multiple files exist, specify one:
 
 ```
-python D:\code\opencli_test\update_demo.py --file <path\to\urls.txt>
+python D:\code\opencli_test\update_demo.py --excel <path\to\file.xlsx> <url1> [url2 ...]
 ```
 
-3. The script will:
-   - Open each URL in the `devcloud-tasks` browser session
-   - Call the `/projectman/openapi/v1/scrum/getShow` API
-   - Route the result: **Bug** → sheet `修复缺陷`; everything else → sheet `新增功能`
-   - Skip tasks already present in the sheet (deduplication by task ID)
-   - Save `excel/demo.xlsx`
+URL file mode:
 
-4. Report the summary line printed by the script (added + skipped counts).
+```
+python D:\code\opencli_test\update_demo.py --file urls.txt
+```
+
+## Routing logic
+
+| Status | Type | Sheet |
+|--------|------|-------|
+| 新建 / 进行中 | any | 遗留问题 |
+| other | Bug | 修复缺陷 |
+| other | Task/Story/… | 新增功能 |
+
+## Side effects
+
+- **版本信息 sheet**: B2 ← today's date (`YYYYMMDD`), B4 ← latest commit hash from build URL in B3.
+- Duplicate rows are skipped (dedup by task ID in col A).
+- Col A gets a hyperlink to the original DevCloud URL.
 
 ## Requirements
 
-- OpenCLI daemon must be running (`opencli daemon start`)
-- Browser session `devcloud-tasks` must be open and logged in to DevCloud
-- `openpyxl` must be installed (`pip install openpyxl`)
-- `excel/demo.xlsx` must exist at `D:\code\opencli_test\excel\demo.xlsx`
+- OpenCLI daemon running (`opencli daemon start`)
+- Browser session `devcloud-tasks` logged into DevCloud
+- `pip install openpyxl`
+- At least one `.xlsx` in `D:\code\opencli_test\excel\`
