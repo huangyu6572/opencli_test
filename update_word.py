@@ -135,9 +135,12 @@ def _write_cell(cell, text):
 
 def _fill_table(table, data_rows, col_title=1):
     """
-    Clear data rows and repopulate: col0=seq, col{col_title}=标题, col2=描述.
-    Preserves header; clears all data rows then rebuilds.
+    Repopulate: col0=seq, col{col_title}=标题, col2=描述.
+    If data_rows is empty, skip — leave the table as-is.
     """
+    if not data_rows:
+        print(f"  [word] table: 0 rows (skipped)", flush=True)
+        return
     _clear_data_rows(table)
     for _ in range(len(data_rows)):
         table.add_row()
@@ -155,6 +158,7 @@ def _update_upgrade_para(doc, section_heading, feat_rows, bug_rows, legacy_rows,
     """
     Find 升级说明 paragraph inside the given section, then replace the
     next body paragraph's text with an auto-generated summary.
+    Always lists all 3 categories (新增功能/已修复问题/已知问题) with counts.
     """
     paras = doc.paragraphs
     in_section = False
@@ -163,25 +167,34 @@ def _update_upgrade_para(doc, section_heading, feat_rows, bug_rows, legacy_rows,
             in_section = True
             continue
         if in_section and "\u5347\u7ea7\u8bf4\u660e" in p.text:  # 升级说明
-            # Find the next non-empty paragraph
             for j in range(i + 1, len(paras)):
                 if paras[j].text.strip():
                     target = paras[j]
                     lines = [
                         f"\u672c\u7248\u672c\uff08{version}\uff0c{date}\uff09\u4e3b\u8981\u53d8\u66f4\u5982\u4e0b\uff1a"
                     ]
-                    if feat_rows:
-                        lines.append(f"\u65b0\u589e\u529f\u80fd\uff08\u5171 {len(feat_rows)} \u9879\uff09\uff1a")
-                        for r in feat_rows:
-                            lines.append(f"  \u00b7 {r.get('\u6807\u9898', '')}")
-                    if bug_rows:
-                        lines.append(f"\u5df2\u4fee\u590d\u95ee\u9898\uff08\u5171 {len(bug_rows)} \u9879\uff09\uff1a")
-                        for r in bug_rows:
-                            lines.append(f"  \u00b7 {r.get('\u6807\u9898', '')}")
-                    if legacy_rows:
-                        lines.append(f"\u9057\u7559\u5df2\u77e5\u95ee\u9898\uff08\u5171 {len(legacy_rows)} \u9879\uff09\uff1a")
-                        for r in legacy_rows:
-                            lines.append(f"  \u00b7 {r.get('\u6800\u9898', '')}")
+                    # Always show all 3 categories
+                    lines.append(f"\u65b0\u589e\u529f\u80fd\uff08\u5171 {len(feat_rows)} \u9879\uff09\uff1a")
+                    for r in feat_rows:
+                        desc = r.get("\u63cf\u8ff0", "")
+                        entry = f"  \u00b7 {r.get('\u6807\u9898', '')}"
+                        if desc:
+                            entry += f" \uff08{desc}\uff09"
+                        lines.append(entry)
+                    lines.append(f"\u5df2\u4fee\u590d\u95ee\u9898\uff08\u5171 {len(bug_rows)} \u9879\uff09\uff1a")
+                    for r in bug_rows:
+                        desc = r.get("\u63cf\u8ff0", "")
+                        entry = f"  \u00b7 {r.get('\u6807\u9898', '')}"
+                        if desc:
+                            entry += f" \uff08{desc}\uff09"
+                        lines.append(entry)
+                    lines.append(f"\u9057\u7559\u5df2\u77e5\u95ee\u9898\uff08\u5171 {len(legacy_rows)} \u9879\uff09\uff1a")
+                    for r in legacy_rows:
+                        desc = r.get("\u63cf\u8ff0", "")
+                        entry = f"  \u00b7 {r.get('\u6807\u9898', '')}"
+                        if desc:
+                            entry += f" \uff08{desc}\uff09"
+                        lines.append(entry)
 
                     summary = "\n".join(lines)
                     for run in target.runs:
@@ -192,8 +205,7 @@ def _update_upgrade_para(doc, section_heading, feat_rows, bug_rows, legacy_rows,
                         target.add_run(summary)
                     print(f"  [word] \u5347\u7ea7\u8bf4\u660e: updated", flush=True)
                     return
-    print(f"  [word] WARNING: \u5347\u7ea7\u8bf4\u660e in [{section_heading}] not found",
-          flush=True)
+    # 升级说明 not found — skip silently
 
 
 # ── inspect mode ──────────────────────────────────────────────────────────────
@@ -249,13 +261,17 @@ def update_word(excel_path=None, word_path=None, descriptions=None):
     bug_rows    = _read_sheet_rows(wb, SHEET_BUG)
     legacy_rows = _read_sheet_rows(wb, SHEET_LEGACY)
 
-    # Inject descriptions into row dicts
+    # Inject descriptions into row dicts (use summary field)
     if descriptions:
         for row_list in (feat_rows, bug_rows, legacy_rows):
             for rd in row_list:
-                tid = str(rd.get("编号", "") or "")
+                tid = str(rd.get("\u7f16\u53f7", "") or "")
                 if tid in descriptions:
-                    rd["描述"] = descriptions[tid]
+                    val = descriptions[tid]
+                    if isinstance(val, dict):
+                        rd["\u63cf\u8ff0"] = val.get("summary", val.get("raw", ""))
+                    else:
+                        rd["\u63cf\u8ff0"] = str(val)
 
     doc = Document(word_path)
     SECTION = "\u7ba1\u7ef4\u5e73\u53f0\u7248\u672c\u66f4\u65b0\u8bf4\u660e"  # 管维平台版本更新说明
@@ -282,9 +298,6 @@ def update_word(excel_path=None, word_path=None, descriptions=None):
         if t:
             _fill_table(t, rows)
             print(f"  [word] {label}: {len(rows)} rows", flush=True)
-        else:
-            print(f"  [word] WARNING: '{sub_heading}' table in {SECTION!r} not found",
-                  flush=True)
 
     # 5. 升级说明 paragraph
     _update_upgrade_para(doc, SECTION, feat_rows, bug_rows, legacy_rows, version, build_date)

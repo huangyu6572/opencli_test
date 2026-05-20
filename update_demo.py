@@ -92,12 +92,54 @@ EXTRACT_JS = (
 )
 
 
-def _strip_html(raw, maxlen=50):
-    """Strip HTML tags, decode entities, collapse whitespace, truncate."""
+def _clean_html(raw):
+    """Strip HTML tags, decode entities, collapse whitespace. No truncation."""
     text = re.sub(r'<[^>]+>', ' ', str(raw))
     text = _html_lib.unescape(text)
     text = re.sub(r'\s+', ' ', text).strip()
-    return text[:maxlen]
+    return text
+
+
+def _summarize(text, maxlen=50):
+    """Produce a concise Chinese summary (≤maxlen chars) from raw description text.
+    Uses heuristic: strip boilerplate patterns, extract first meaningful sentence."""
+    if not text or not text.strip():
+        return ""
+    t = text.strip()
+    # Remove DevCloud boilerplate blocks (order matters)
+    boilerplate_keys = [
+        r'前提条件[：:]\s*',
+        r'测试环境[：:][^。；\n/]*?[。；\n/]\s*',
+        r'测试步骤[：:]\s*',
+        r'前置条件[：:]\s*',
+        r'环境信息[：:]\s*',
+        r'用例描述[：:]\s*',
+        r'测试用例[：:]\s*',
+        r'期望结果[：:]\s*',
+    ]
+    for pat in boilerplate_keys:
+        t = re.sub(pat, '', t, count=1)
+    t = t.strip()
+    # Remove leading // and numbering
+    t = re.sub(r'^[\s//]+', '', t)
+    t = re.sub(r'^\d+[\.\、\)]\s*', '', t)
+    t = t.strip()
+    # Take first meaningful segment up to first Chinese period
+    m = re.match(r'^(.+?[。！？])', t)
+    if m:
+        t = m.group(1)
+    else:
+        m2 = re.match(r'^(.+?[；;])', t)
+        if m2:
+            t = m2.group(1)
+        else:
+            # No sentence boundary — truncate at first Chinese comma
+            m3 = re.match(r'^(.+?[，,])', t)
+            if m3:
+                t = m3.group(1)
+    # Collapse whitespace
+    t = re.sub(r'\s+', ' ', t).strip()
+    return t[:maxlen]
 
 
 def run_opencli(*args):
@@ -170,7 +212,7 @@ def fetch_task(url):
         "due_date":    _parse_date(data.get("due_date", "")),
         "start_date":  _parse_date(data.get("start_date", "")),
         "created_on":  _parse_date(data.get("created_on", "")),
-        "description": _strip_html(data.get("description", "")),
+        "description": _clean_html(data.get("description", "")),
     }
     print(f"  [{r['type']}] {r['subject'][:50]!r}  status={r['status']!r}  priority={r['priority']!r}", flush=True)
     return r
@@ -228,7 +270,7 @@ def update_excel(rows, demo_path):
 
     wb = openpyxl.load_workbook(demo_path)
     added_feat = added_bug = added_legacy = skipped = 0
-    descriptions = {}  # {task_id: description} sidecar
+    descriptions = {}  # {task_id: {"raw": str, "summary": str}} sidecar
 
     for r in rows:
         if r is None:
@@ -280,7 +322,7 @@ def update_excel(rows, demo_path):
 
         print(f"  written #{r['id']} -> '{ws.title}' row {row_i}", flush=True)
         if r.get("description"):
-            descriptions[r["id"]] = r["description"]
+            descriptions[r["id"]] = {"raw": r["description"], "summary": ""}
 
     # Update 版本信息: read build URL from B3, fetch latest commit, write date+commit
     try:
@@ -305,8 +347,18 @@ def update_excel(rows, demo_path):
         import json as _json
         with open(sidecar, encoding="utf-8") as f:
             existing = _json.load(f)
+        # existing is {task_id: str (old format) or {raw,summary} (new format)}
+        for tid, val in existing.items():
+            if isinstance(val, str):
+                existing[tid] = {"raw": val, "summary": _summarize(val)}
         existing.update(descriptions)
         descriptions = existing
+
+    # Summarize newly added items (those with empty summary)
+    for tid, val in descriptions.items():
+        if val.get("summary", "") == "":
+            val["summary"] = _summarize(val.get("raw", ""))
+
     if descriptions:
         import json as _json
         with open(sidecar, "w", encoding="utf-8") as f:
