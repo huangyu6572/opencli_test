@@ -101,40 +101,53 @@ def _clean_html(raw):
 
 
 def _summarize(text):
-    """Extract the core problem/solution from a DevCloud description.
-    Strips boilerplate, keeps substantive action descriptions.
-    No length limit. Captures what this task actually does/fixes."""
+    """Extract the core feature/fix from a DevCloud description.
+    Strips boilerplate, tool usage verbs, and test-step framing —
+    keeps only the substantive functionality.
+    For 新增功能: what new capability does this add?
+    For Bug: what was the problem / what got fixed?"""
     if not text or not text.strip():
         return ""
     t = text.strip()
 
-    # Extract the test-steps section (核心功能描述) — this is the most useful part
-    # Structure: 测试步骤：<content> [期望结果：...]
+    # Extract the test-steps section (core functionality)
     step_match = re.search(r'测试步骤[：:]\s*(.+?)(?=期望结果[：:]|$)', t, re.DOTALL)
     if step_match:
         content = step_match.group(1).strip()
     else:
-        # Fallback: use everything but strip boilerplate headers
         content = t
 
-    # Clean up the content
-    # Remove // comments (until next numbered step or Chinese text, not greedy)
-    content = re.sub(r'\s*//[^/\d]*(?=\d)', '', content)
-    content = re.sub(r'\s*//\s*$', '', content)       # trailing //
-    # Remove parenthetical notes with no-changes markers
-    content = re.sub(r'[（(]\s*(?:暂不支持|暂未|TODO|待定|license相关)[^)）]*[)）]', '', content)
-    # Remove (rtos接口相关，暂不支持) type patterns
-    content = re.sub(r'[（(][^)）]{0,30}[)）]', '', content)
-    # Numbered steps: "1. xxx 2. xxx" → "xxx；xxx"
-    content = re.sub(r'\s*\d+[\.\、\)]\s*', '；', content)
     # Clean up
+    content = re.sub(r'\s*//[^/\d]*(?=\d)', '', content)
+    content = re.sub(r'\s*//\s*$', '', content)
+    content = re.sub(r'[（(]\s*(?:暂不支持|暂未|TODO|待定|license相关|rtos接口相关)[^)）]*[)）]', '', content)
+    content = re.sub(r'\s*\d+[\.\、\)]\s*', '；', content)
     content = re.sub(r'[；;]{2,}', '；', content)
     content = re.sub(r'[，,]{2,}', '，', content)
     content = re.sub(r'^[；;，,.\s]+', '', content)
     content = re.sub(r'[；;，,.\s]+$', '', content)
     content = re.sub(r'\s+', ' ', content).strip()
 
-    # If nothing left after cleaning, return the original stripped
+    # Remove tool-usage boilerplate verbs — these describe HOW to test, not WHAT the feature is
+    tool_verbs = [
+        r'打开管维工具[，,]?\s*',
+        r'登录管维[，,]?\s*',
+        r'进入管维[，,]?\s*',
+        r'在管维中[，,]?\s*',
+        r'使用管维[，,]?\s*',
+        r'点击.*?按钮[，,]?\s*',
+        r'选择.*?菜单[，,]?\s*',
+        r'导航到.*?页面[，,]?\s*',
+    ]
+    for pat in tool_verbs:
+        content = re.sub(pat, '', content)
+
+    # Clean up leftover separators
+    content = re.sub(r'[；;]{2,}', '；', content)
+    content = re.sub(r'^[；;，,.\s]+', '', content)
+    content = re.sub(r'[；;，,.\s]+$', '', content)
+    content = re.sub(r'\s+', ' ', content).strip()
+
     if not content:
         return t[:200]
 

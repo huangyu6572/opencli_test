@@ -45,14 +45,14 @@ python D:\code\opencli_test\update_demo.py --file urls.txt
 ## Side effects
 
 - **版本信息 sheet**: B2 ← today's date (`YYYYMMDD`), B4 ← latest commit hash from build URL in B3.
-- **Description summarization**: Full raw description saved to `excel/task_descriptions.json` as `{task_id: {"raw": "...", "summary": "..."}}`. Summary automatically extracts core problem/solution by stripping boilerplate (前提条件/测试环境/测试步骤/期望结果). No length limit — captures complete meaning.
-  - 新增功能: the problem it solves
-  - Bug: the issue it fixes
+- **Description summarization**: Full raw description saved to `excel/task_descriptions.json` as `{task_id: {"raw": "...", "summary": "..."}}`. Summary extracts the substantive functionality from 测试步骤, stripping boilerplate (前提条件/测试环境/期望结果) and tool-usage verbs (打开管维工具/点击按钮 etc.). No length limit.
+  - 新增功能: what new capability does this add
+  - Bug: what problem was fixed
   - 遗留问题: the known limitation
 - **Word sync**: auto-updates `word/版本发布更新说明-管维.docx` (管维平台 section):
   - version table: date + version from `版本信息`
   - 功能更新 table ← `新增功能` (col2=summary), 已修复问题 ← `修复缺陷`, 已知问题与限制 ← `遗留问题`
-  - 升级说明 paragraph ← auto-generated summary with all 3 categories (always shown, counts included)
+  - 升级说明 paragraph ← auto-generated summary — only lists categories that have items (skip 0-count)
   - Empty sections: tables left as-is (not cleared)
   - Missing sections: skipped silently
 - Duplicate rows are skipped (dedup by task ID in col A).

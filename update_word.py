@@ -158,7 +158,7 @@ def _update_upgrade_para(doc, section_heading, feat_rows, bug_rows, legacy_rows,
     """
     Find 升级说明 paragraph inside the given section, then replace the
     next body paragraph's text with an auto-generated summary.
-    Always lists all 3 categories (新增功能/已修复问题/已知问题) with counts.
+    Only lists categories that have items (>0 rows).
     """
     paras = doc.paragraphs
     in_section = False
@@ -173,28 +173,31 @@ def _update_upgrade_para(doc, section_heading, feat_rows, bug_rows, legacy_rows,
                     lines = [
                         f"\u672c\u7248\u672c\uff08{version}\uff0c{date}\uff09\u4e3b\u8981\u53d8\u66f4\u5982\u4e0b\uff1a"
                     ]
-                    # Always show all 3 categories
-                    lines.append(f"\u65b0\u589e\u529f\u80fd\uff08\u5171 {len(feat_rows)} \u9879\uff09\uff1a")
-                    for r in feat_rows:
-                        desc = r.get("\u63cf\u8ff0", "")
-                        entry = f"  \u00b7 {r.get('\u6807\u9898', '')}"
-                        if desc:
-                            entry += f" \uff08{desc}\uff09"
-                        lines.append(entry)
-                    lines.append(f"\u5df2\u4fee\u590d\u95ee\u9898\uff08\u5171 {len(bug_rows)} \u9879\uff09\uff1a")
-                    for r in bug_rows:
-                        desc = r.get("\u63cf\u8ff0", "")
-                        entry = f"  \u00b7 {r.get('\u6807\u9898', '')}"
-                        if desc:
-                            entry += f" \uff08{desc}\uff09"
-                        lines.append(entry)
-                    lines.append(f"\u9057\u7559\u5df2\u77e5\u95ee\u9898\uff08\u5171 {len(legacy_rows)} \u9879\uff09\uff1a")
-                    for r in legacy_rows:
-                        desc = r.get("\u63cf\u8ff0", "")
-                        entry = f"  \u00b7 {r.get('\u6807\u9898', '')}"
-                        if desc:
-                            entry += f" \uff08{desc}\uff09"
-                        lines.append(entry)
+                    # Only show categories with items
+                    if feat_rows:
+                        lines.append(f"\u65b0\u589e\u529f\u80fd\uff08\u5171 {len(feat_rows)} \u9879\uff09\uff1a")
+                        for r in feat_rows:
+                            desc = r.get("\u63cf\u8ff0", "")
+                            entry = f"  \u00b7 {r.get('\u6807\u9898', '')}"
+                            if desc:
+                                entry += f" \uff08{desc}\uff09"
+                            lines.append(entry)
+                    if bug_rows:
+                        lines.append(f"\u5df2\u4fee\u590d\u95ee\u9898\uff08\u5171 {len(bug_rows)} \u9879\uff09\uff1a")
+                        for r in bug_rows:
+                            desc = r.get("\u63cf\u8ff0", "")
+                            entry = f"  \u00b7 {r.get('\u6807\u9898', '')}"
+                            if desc:
+                                entry += f" \uff08{desc}\uff09"
+                            lines.append(entry)
+                    if legacy_rows:
+                        lines.append(f"\u9057\u7559\u5df2\u77e5\u95ee\u9898\uff08\u5171 {len(legacy_rows)} \u9879\uff09\uff1a")
+                        for r in legacy_rows:
+                            desc = r.get("\u63cf\u8ff0", "")
+                            entry = f"  \u00b7 {r.get('\u6807\u9898', '')}"
+                            if desc:
+                                entry += f" \uff08{desc}\uff09"
+                            lines.append(entry)
 
                     summary = "\n".join(lines)
                     for run in target.runs:
