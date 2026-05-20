@@ -231,7 +231,7 @@ def inspect_doc(word_path):
 
 # ── main update ───────────────────────────────────────────────────────────────
 
-def update_word(excel_path=None, word_path=None, descriptions=None):
+def update_word(excel_path=None, word_path=None, descriptions=None, clear=False):
     _require("openpyxl", "openpyxl")
     _require("docx", "python-docx")
     import openpyxl
@@ -299,8 +299,17 @@ def update_word(excel_path=None, word_path=None, descriptions=None):
     ]:
         t = _table_after_section(doc, SECTION, sub_heading)
         if t:
-            _fill_table(t, rows)
-            print(f"  [word] {label}: {len(rows)} rows", flush=True)
+            if clear:
+                # --clear mode: always wipe table data, then fill if there are rows
+                _clear_data_rows(t)
+                if rows:
+                    _fill_table(t, rows)
+                    print(f"  [word] {label}: {len(rows)} rows (cleared)", flush=True)
+                else:
+                    print(f"  [word] {label}: cleared (0 rows)", flush=True)
+            else:
+                _fill_table(t, rows)
+                print(f"  [word] {label}: {len(rows)} rows", flush=True)
 
     # 5. 升级说明 paragraph
     _update_upgrade_para(doc, SECTION, feat_rows, bug_rows, legacy_rows, version, build_date)

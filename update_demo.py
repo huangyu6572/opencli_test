@@ -275,7 +275,17 @@ def _next_empty_row(ws):
     return ws.max_row + 1
 
 
-def update_excel(rows, demo_path):
+def _clear_sheet_data(wb, sheet_name):
+    """Delete all data rows (row 2+) from a sheet, preserving row 1 (header)."""
+    if sheet_name not in wb.sheetnames:
+        return
+    ws = wb[sheet_name]
+    max_r = ws.max_row
+    if max_r > 1:
+        ws.delete_rows(2, max_r - 1)
+
+
+def update_excel(rows, demo_path, clear=False):
     if not os.path.exists(demo_path):
         print(f"ERROR: {demo_path} not found.", file=sys.stderr)
         sys.exit(1)
@@ -283,6 +293,16 @@ def update_excel(rows, demo_path):
     wb = openpyxl.load_workbook(demo_path)
     added_feat = added_bug = added_legacy = skipped = 0
     descriptions = {}  # {task_id: {"raw": str, "summary": str}} sidecar
+
+    # --clear mode: wipe all 3 sheet data rows before writing
+    if clear:
+        for sn in (SHEET_FEATURE, SHEET_BUG, SHEET_LEGACY):
+            _clear_sheet_data(wb, sn)
+        # Also clear the sidecar JSON
+        sidecar = os.path.join(EXCEL_DIR, "task_descriptions.json")
+        if os.path.exists(sidecar):
+            os.remove(sidecar)
+        print(f"  [clear] wiped data rows in {SHEET_FEATURE}/{SHEET_BUG}/{SHEET_LEGACY}", flush=True)
 
     for r in rows:
         if r is None:
@@ -380,8 +400,8 @@ def update_excel(rows, demo_path):
     try:
         sys.path.insert(0, SCRIPT_DIR)
         from update_word import update_word as _uw
-        # Pass explicit excel path and descriptions so we don't re-resolve
-        _uw(excel_path=demo_path, descriptions=descriptions)
+        # Pass explicit excel path, descriptions, and clear flag
+        _uw(excel_path=demo_path, descriptions=descriptions, clear=clear)
     except ImportError:
         pass  # update_word.py optional
     except Exception as e:
@@ -393,6 +413,11 @@ def update_excel(rows, demo_path):
 def main():
     args = sys.argv[1:]
     urls = []
+    clear = False
+
+    if "--clear" in args:
+        clear = True
+        args.remove("--clear")
 
     # --excel <path>: explicit xlsx target
     demo_path = None
@@ -421,7 +446,7 @@ def main():
 
     print(f"Fetching {len(urls)} task(s)...", flush=True)
     rows = [fetch_task(u) for u in urls]
-    update_excel([r for r in rows if r is not None], demo_path)
+    update_excel([r for r in rows if r is not None], demo_path, clear=clear)
 
 
 if __name__ == "__main__":
