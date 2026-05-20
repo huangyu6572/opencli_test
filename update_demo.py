@@ -276,13 +276,21 @@ def _next_empty_row(ws):
 
 
 def _clear_sheet_data(wb, sheet_name):
-    """Delete all data rows (row 2+) from a sheet, preserving row 1 (header)."""
+    """Delete data rows (row 3+) and leave row 2 as a yellow-highlighted blank row."""
     if sheet_name not in wb.sheetnames:
         return
     ws = wb[sheet_name]
     max_r = ws.max_row
-    if max_r > 1:
-        ws.delete_rows(2, max_r - 1)
+    # Delete rows 3+
+    if max_r >= 3:
+        ws.delete_rows(3, max_r - 2)
+    # Row 2: clear content, set yellow background
+    from openpyxl.styles import PatternFill
+    yellow_fill = PatternFill(start_color="FFFF00", end_color="FFFF00", fill_type="solid")
+    for c in range(1, ws.max_column + 1):
+        cell = ws.cell(row=2, column=c)
+        cell.value = None
+        cell.fill = yellow_fill
 
 
 def update_excel(rows, demo_path, clear=False):
