@@ -45,6 +45,10 @@ python D:\code\opencli_test\update_demo.py --file urls.txt
 ## Side effects
 
 - **版本信息 sheet**: B2 ← today's date (`YYYYMMDD`), B4 ← latest commit hash from build URL in B3.
+- **Word sync**: auto-updates `word/版本发布更新说明-管维.docx` (管维平台 section):
+  - version table: date + version from `版本信息`
+  - 功能更新 table ← `新增功能`, 已修复问题 ← `修复缺陷`, 已知问题与限制 ← `遗留问题`
+  - 升级说明 paragraph ← auto-generated summary
 - Duplicate rows are skipped (dedup by task ID in col A).
 - Col A gets a hyperlink to the original DevCloud URL.
 

@@ -284,6 +284,18 @@ def update_excel(rows, demo_path):
 
     wb.save(demo_path)
     print(f"\nSaved: {demo_path}", flush=True)
+
+    # Sync to Word release-notes document if update_word.py is present
+    try:
+        sys.path.insert(0, SCRIPT_DIR)
+        from update_word import update_word as _uw
+        # Pass explicit excel path so we don't re-resolve
+        _uw(excel_path=demo_path)
+    except ImportError:
+        pass  # update_word.py optional
+    except Exception as e:
+        print(f"  [word] WARNING: {e}", flush=True)
+
     print(f"  {SHEET_FEATURE}: +{added_feat}  {SHEET_BUG}: +{added_bug}  {SHEET_LEGACY}: +{added_legacy}  skipped: {skipped}", flush=True)
 
 
