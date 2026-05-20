@@ -2,15 +2,16 @@
 """
 update_demo.py - Extract DevCloud task/bug details and append to demo.xlsx.
 
-Routing:
-  tracker == "Bug"   -> sheet (xiu fu que xian)
-  anything else      -> sheet (xin zeng gong neng)
+Routing (status checked first):
+  status in {新建, 进行中}  -> 遗留问题 sheet
+  status else + Bug         -> 修复缺陷 sheet
+  status else + other       -> 新增功能 sheet
 
-New-feature columns (A-H, F/G/I left blank):
-  ID | Title | EndDate | Status | Assignee | - | - | Priority | -
+新增功能 / 遗留问题 columns (A-I):
+  ID | Title | EndDate | Status | Assignee | EstStart | EstEnd | Priority | Created
 
-Bug columns (A-E):
-  ID | Title | Status | Assignee | Priority
+修复缺陷 columns (A-K, skip F/G):
+  ID | Title | Status | Assignee | Priority | - | - | EndDate | EstStart | EstEnd | Created
 
 Usage:
     python update_demo.py <url1> [url2 ...]
@@ -34,8 +35,12 @@ SESSION = "devcloud-tasks"
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 DEMO_PATH = os.path.join(SCRIPT_DIR, "excel", "demo.xlsx")
 
-SHEET_FEATURE = "\u65b0\u589e\u529f\u80fd "  # xin zeng gong neng (trailing space in xlsx)
-SHEET_BUG     = "\u4fee\u590d\u7f3a\u9677"   # xiu fu que xian
+SHEET_FEATURE = "\u65b0\u589e\u529f\u80fd "  # 新增功能 (trailing space in xlsx)
+SHEET_BUG     = "\u4fee\u590d\u7f3a\u9677"   # 修复缺陷
+SHEET_LEGACY  = "\u9057\u7559\u95ee\u9898"   # 遗留问题
+
+# Statuses that route to the legacy (遗留问题) sheet regardless of type
+LEGACY_STATUSES = {"\u65b0\u5efa", "\u8fdb\u884c\u4e2d"}  # 新建, 进行中
 
 # JavaScript: synchronous XHR to the same-origin getShow API.
 # X-Requested-With header is required - without it the SPA returns its HTML shell.
@@ -60,7 +65,9 @@ EXTRACT_JS = (
     "assignee:iss.assigned_to&&iss.assigned_to.firstName||'',"
     "priority:iss.priority&&iss.priority.name||'',"
     "type:iss.tracker&&iss.tracker.name||'',"
-    "due_date:iss.due_date||''"
+    "due_date:iss.due_date||'',"
+    "start_date:iss.start_date||'',"
+    "created_on:iss.created_on||''"
     "});"
     "})()"
 )
@@ -133,6 +140,8 @@ def fetch_task(url):
         "priority":   data.get("priority", "").strip(),
         "type":       data.get("type", ""),
         "due_date":   _parse_date(data.get("due_date", "")),
+        "start_date": _parse_date(data.get("start_date", "")),
+        "created_on": _parse_date(data.get("created_on", "")),
     }
     print(f"  [{r['type']}] {r['subject'][:50]!r}  status={r['status']!r}  priority={r['priority']!r}", flush=True)
     return r
@@ -158,13 +167,20 @@ def update_excel(rows):
         sys.exit(1)
 
     wb = openpyxl.load_workbook(DEMO_PATH)
-    added_feat = added_bug = skipped = 0
+    added_feat = added_bug = added_legacy = skipped = 0
 
     for r in rows:
         if r is None:
             continue
-        is_bug = r["type"].lower() in ("bug", "\u7f3a\u9677")
-        ws = wb[SHEET_BUG] if is_bug else wb[SHEET_FEATURE]
+        is_legacy = r["status"] in LEGACY_STATUSES
+        is_bug    = r["type"].lower() in ("bug", "\u7f3a\u9677")
+
+        if is_legacy:
+            ws = wb[SHEET_LEGACY]
+        elif is_bug:
+            ws = wb[SHEET_BUG]
+        else:
+            ws = wb[SHEET_FEATURE]
 
         if _id_in_sheet(ws, r["id"]):
             print(f"  [skip] #{r['id']} already in '{ws.title}'", flush=True)
@@ -173,29 +189,39 @@ def update_excel(rows):
 
         row_i = _next_empty_row(ws)
 
-        if is_bug:
-            # A: ID  B: Title  C: Status  D: Assignee  E: Priority
-            ws.cell(row_i, 1).value = r["id"]
-            ws.cell(row_i, 2).value = r["subject"]
-            ws.cell(row_i, 3).value = r["status"]
-            ws.cell(row_i, 4).value = r["assignee"]
-            ws.cell(row_i, 5).value = r["priority"]
+        if is_bug and not is_legacy:
+            # 修复缺陷: A编号 B标题 C状态 D处理人 E优先级 (F完成度 G类型 skip) H结束时间 I预计开始 J预计结束 K创建时间
+            ws.cell(row_i, 1).value  = r["id"]
+            ws.cell(row_i, 2).value  = r["subject"]
+            ws.cell(row_i, 3).value  = r["status"]
+            ws.cell(row_i, 4).value  = r["assignee"]
+            ws.cell(row_i, 5).value  = r["priority"]
+            ws.cell(row_i, 8).value  = r["due_date"]
+            ws.cell(row_i, 9).value  = r["start_date"]
+            ws.cell(row_i, 10).value = r["due_date"]
+            ws.cell(row_i, 11).value = r["created_on"]
             added_bug += 1
         else:
-            # A: ID  B: Title  C: EndDate  D: Status  E: Assignee  H: Priority
+            # 新增功能 / 遗留问题: A编号 B标题 C结束时间 D状态 E处理人 F预计开始 G预计结束 H优先级 I创建时间
             ws.cell(row_i, 1).value = r["id"]
             ws.cell(row_i, 2).value = r["subject"]
             ws.cell(row_i, 3).value = r["due_date"]
             ws.cell(row_i, 4).value = r["status"]
             ws.cell(row_i, 5).value = r["assignee"]
+            ws.cell(row_i, 6).value = r["start_date"]
+            ws.cell(row_i, 7).value = r["due_date"]
             ws.cell(row_i, 8).value = r["priority"]
-            added_feat += 1
+            ws.cell(row_i, 9).value = r["created_on"]
+            if is_legacy:
+                added_legacy += 1
+            else:
+                added_feat += 1
 
         print(f"  written #{r['id']} -> '{ws.title}' row {row_i}", flush=True)
 
     wb.save(DEMO_PATH)
     print(f"\nSaved: {DEMO_PATH}", flush=True)
-    print(f"  {SHEET_FEATURE}: +{added_feat}  {SHEET_BUG}: +{added_bug}  skipped: {skipped}", flush=True)
+    print(f"  {SHEET_FEATURE}: +{added_feat}  {SHEET_BUG}: +{added_bug}  {SHEET_LEGACY}: +{added_legacy}  skipped: {skipped}", flush=True)
 
 
 def main():
